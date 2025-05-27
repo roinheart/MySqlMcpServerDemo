@@ -8,6 +8,8 @@ import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.sql.SQLException;
+
 @Service
 public class McpServiceTools {
 
@@ -22,18 +24,7 @@ public class McpServiceTools {
 
     @Tool(name = "insert", description = "mysql数据批量插入")
     public String insert(
-            @ToolParam(description = "参数格式：application/json;表名:tableName,列名:columnNames用逗号隔开,待插入数据Json数组:values") JSONObject paramData) {
-        String tableName = paramData.getString("tableName");
-        String columnNames = paramData.getString("columnNames").replace(" ", "");
-        JSONArray values = JSONArray.parseArray(paramData.getJSONArray("values").toJSONString());
-        Integer integer = DBUtils.insert(tableName, columnNames, values);
-        return "数据插入成功" + integer + "条！";
+            @ToolParam(description = "Insert sql string") String sql) throws SQLException {
+        return DBUtils.insert(sql) ? "数据插入成功" : "数据插入失败";
     }
-
-    @Tool(name = "insertBySql", description = "通过SQL语句插入数据")
-    public String insertBySql(@ToolParam(description = "待执行的INSERT SQL语句") String sql) {
-        Integer integer = DBUtils.insertOrUpdateBySql(sql);
-        return "数据插入成功" + integer + "条！";
-    }
-
 }

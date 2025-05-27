@@ -1,5 +1,6 @@
 package com.thinkcalc.MysqlMcpServer.utils;
 
+import cn.hutool.core.util.StrUtil;
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
 import io.micrometer.common.util.StringUtils;
@@ -26,52 +27,37 @@ public class DBUtils {
     @Value("${spring.datasource.password}")
     private String password;
 
-    public Integer insert(String tableName, String columns, JSONArray values) {
-        Connection connection = null;
+    public Boolean insert(String sql) throws SQLException {
+        if (StrUtil.isBlank(sql)) {
+            return false;
+        }
+        Connection conn = null;
         PreparedStatement ps = null;
-        Statement st = null;
-        String[] split = columns.split(",");
-        StringBuffer sb = new StringBuffer();
-        int[] total = new int[values.size()];
-        //获取表中的所有字段名
-        Map<String, String> columnMap = getColumns(tableName);
-        System.out.println(columnMap);
-        for (int i = 0; i < split.length; i++) {
-            //判断字段名是否错误
-            Boolean aBoolean = verifyColumn(columnMap, columns);
-            if (!aBoolean) {
-                return 0;
-            }
-            sb.append("?,");
-        }
-        String str = sb.substring(0, sb.length() - 1);
         try {
-            //获取数据库连接
-            connection = DriverManager.getConnection(url, username, password);
-            //预编译sql
-            String sql = "INSERT INTO " + tableName + "(" + columns + ")" +
-                    " VALUES (" + str + ")";
+            conn = DriverManager.getConnection(url, username, password);
+            conn.setAutoCommit(false); // 关闭自动提交，开启事务
+            ps = conn.prepareStatement(sql);
 
-            System.out.println(sql);
-            //获取执行sql对象
-            ps = connection.prepareStatement(sql);
-            //控制事务默认不提交
-            connection.setAutoCommit(false);
-            for (Object o : values) {
-                JSONObject object = (JSONObject) o;
-                setColumns(ps, columnMap, columns, object);
-                ps.addBatch();
+            if (ps == null) {
+                throw new SQLException("PreparedStatement 创建失败，SQL: " + sql);
             }
-            total = ps.executeBatch();
-            //手动提交事务
-            connection.commit();
+
+            int rowsAffected = ps.executeUpdate();
+            conn.commit();
+            return rowsAffected > 0;
         } catch (Exception e) {
-            e.printStackTrace();
+            if (conn != null) {
+                conn.rollback();
+            }
+            throw e;
         } finally {
-            close(connection, ps, st);
+            if (ps != null) {
+                ps.close();
+            }
+            if (conn != null) {
+                conn.close();
+            }
         }
-        int sum = Arrays.stream(total).sum();
-        return sum;
     }
 
     private void setColumns(PreparedStatement ps, Map<String, String> columnMap, String columns, JSONObject object) {
@@ -219,7 +205,7 @@ public class DBUtils {
     /**
      * 执行SQL查询语句并返回结果
      * 该方法用于执行不需要参数绑定的简单SQL查询
-     * 
+     *
      * @param sql 要执行的SQL查询语句
      * @return 查询结果的字符串表示
      */
